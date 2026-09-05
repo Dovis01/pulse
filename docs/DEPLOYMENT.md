@@ -1,5 +1,16 @@
 # Deployment
 
+> **Live (Mode A):** <https://pulse-dovis01s-projects.vercel.app> —
+> Vercel Hobby (dovis01) + Neon free Postgres (`neon-aqua-apple`, Singapore),
+> scheduled by GitHub Actions (public repo, free). Deployment Protection
+> (Vercel Authentication) is disabled so the personal feed is reachable
+> without a Vercel login; re-enable it in the dashboard for a locked-down
+> instance. Hobby cron limits scheduling to once/day, so high-frequency
+> groups run via `.github/workflows/pulse-cron.yml` (fast */15, normal
+> hourly, daily brief 07:30 & 18:00 JST) — secrets `PULSE_URL` and
+> `PULSE_CRON_SECRET` drive the same CRON_SECRET-guarded endpoints.
+
+
 ## Mode A — Vercel + Supabase (default)
 
 ```
