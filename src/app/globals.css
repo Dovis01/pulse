@@ -1,0 +1,172 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── Design tokens (spec §5.1) ─────────────────────────────────────── */
+:root {
+  --background: #fafaf9;
+  --surface: #ffffff;
+  --foreground: #181817;
+  --secondary: #686866;
+  --muted: #9b9b96;
+  --border: #e8e8e4;
+  --border-strong: #d8d8d2;
+  --hover: #f3f3f0;
+  --accent: #181817;
+
+  /* Category hint colors — weak accents only (dots, badges). */
+  --cat-ai: #8b7cf6;
+  --cat-technology: #5b8def;
+  --cat-markets: #34b27d;
+  --cat-world: #e8965a;
+  --cat-science: #4fb8c5;
+  --cat-security: #e06a6a;
+  --cat-neutral: #a3a39d;
+}
+
+.dark {
+  --background: #0d0d0c;
+  --surface: #121211;
+  --foreground: #f2f2ef;
+  --secondary: #a3a39d;
+  --muted: #6f6f69;
+  --border: #262624;
+  --border-strong: #353532;
+  --hover: #181817;
+  --accent: #f2f2ef;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-hover: var(--hover);
+  --color-accent: var(--accent);
+  --color-cat-ai: var(--cat-ai);
+  --color-cat-technology: var(--cat-technology);
+  --color-cat-markets: var(--cat-markets);
+  --color-cat-world: var(--cat-world);
+  --color-cat-science: var(--cat-science);
+  --color-cat-security: var(--cat-security);
+  --color-cat-neutral: var(--cat-neutral);
+
+  --font-sans: var(--font-geist-sans), "Inter", system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+/* ── Base (spec §6 typography) ─────────────────────────────────────── */
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--border-strong);
+}
+
+/* ── Editorial primitives ──────────────────────────────────────────── */
+.headline {
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-weight: 500;
+}
+
+.display-headline {
+  font-size: clamp(30px, 4vw, 42px);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-weight: 500;
+}
+
+.meta-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.meta-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.section-rule {
+  border-top: 1px solid var(--border);
+}
+
+.hairline {
+  border-color: var(--border);
+}
+
+.story-row {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  padding-bottom: 20px;
+  transition: background-color 140ms ease;
+}
+
+.story-row:hover {
+  background: var(--hover);
+}
+
+.read-dim {
+  opacity: 0.55;
+}
+
+/* Motion: opacity + tiny translate only (spec §63). */
+.fade-in {
+  animation: fade-in 160ms ease both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Skeletons (spec §61/§82). */
+.skeleton {
+  background: linear-gradient(90deg, var(--border) 25%, var(--hover) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: skeleton 1.4s ease infinite;
+  border-radius: 2px;
+}
+
+@keyframes skeleton {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Category dot. */
+.cat-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  flex: none;
+}
+
+/* Scrollbar — quiet. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}

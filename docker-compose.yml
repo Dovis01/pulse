@@ -1,0 +1,67 @@
+# Pulse — Deployment Mode B: full self-host (spec §88).
+# Mode A (Vercel + Supabase) is the default and needs none of this.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pulse
+      POSTGRES_PASSWORD: pulse
+      POSTGRES_DB: pulse
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://pulse:pulse@postgres:5432/pulse
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Tokyo}
+      CRON_SECRET: ${CRON_SECRET:-local-cron-secret}
+      # All optional — Pulse degrades gracefully without them:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      AI_PROVIDER: ${AI_PROVIDER:-gemini}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      HF_TOKEN: ${HF_TOKEN:-}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_TO: ${EMAIL_TO:-}
+    ports:
+      - "3000:3000"
+
+  # Serverless Mode A has Vercel Cron; in Mode B this loop drives the same
+  # /api/cron endpoints. Redis stays deliberately absent (cost spec §78).
+  worker:
+    image: curlimages/curl:8.11.1
+    restart: unless-stopped
+    depends_on:
+      - web
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-local-cron-secret}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "Pulse ingestion loop started";
+        while true; do
+          curl -fsS -X POST -H "Authorization: Bearer $${CRON_SECRET}" http://web:3000/api/cron/fast   >/dev/null || echo "fast cron failed";
+          sleep 300;
+          curl -fsS -X POST -H "Authorization: Bearer $${CRON_SECRET}" http://web:3000/api/cron/normal >/dev/null || echo "normal cron failed";
+          sleep 3600;
+          curl -fsS -X POST -H "Authorization: Bearer $${CRON_SECRET}" http://web:3000/api/cron/daily  >/dev/null || echo "daily cron failed";
+        done
+
+volumes:
+  pgdata:
