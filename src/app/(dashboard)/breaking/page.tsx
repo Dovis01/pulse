@@ -1,7 +1,7 @@
 import { StoryRow } from "@/components/news/story-row";
 import { getBreakingView } from "@/lib/queries";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: instant navigation, fresh every minute
 export const metadata = { title: "Breaking" };
 
 export default async function BreakingPage() {

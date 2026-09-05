@@ -6,13 +6,9 @@ import { getRepository } from "@/lib/db";
 import { getStoryView } from "@/lib/queries";
 import { absoluteTime, relativeTime } from "@/lib/time/format";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
+export const metadata = { title: "Story" }; // ISR: instant navigation, fresh every minute
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const view = await getStoryView(slug);
-  return { title: view?.cluster.canonicalTitle.slice(0, 80) ?? "Story" };
-}
 
 export default async function StoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

@@ -398,6 +398,12 @@ export class PgRepository implements Repository {
       });
   }
 
+  async getClusters(ids: string[]): Promise<StoryCluster[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db.select().from(storyClusters).where(inArray(storyClusters.id, ids));
+    return rows.map(rowToCluster);
+  }
+
   async getCluster(idOrSlug: string): Promise<StoryCluster | null> {
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug);
     const [row] = await this.db
@@ -478,12 +484,12 @@ export class PgRepository implements Repository {
   }
 
   async topEntities(since: string, limit: number): Promise<TrendRow[]> {
-    const sinceDate = new Date(since);
+    // Bind ISO text and cast — postgres.js rejects Date inside raw sql fragments.
     const rows = await this.db
       .select({
         label: articleEntities.entity,
-        current: sql<number>`count(*) filter (where ${articleEntities.publishedAt} >= ${sinceDate})::int`,
-        baseline: sql<number>`count(*) filter (where ${articleEntities.publishedAt} < ${sinceDate})::int`,
+        current: sql<number>`count(*) filter (where ${articleEntities.publishedAt} >= ${since}::timestamptz)::int`,
+        baseline: sql<number>`count(*) filter (where ${articleEntities.publishedAt} < ${since}::timestamptz)::int`,
       })
       .from(articleEntities)
       .groupBy(articleEntities.entity)
@@ -493,12 +499,11 @@ export class PgRepository implements Repository {
   }
 
   async topTopics(since: string, limit: number): Promise<TrendRow[]> {
-    const sinceDate = new Date(since);
     const rows = await this.db
       .select({
         label: articleTopics.topic,
-        current: sql<number>`count(*) filter (where ${articleTopics.publishedAt} >= ${sinceDate})::int`,
-        baseline: sql<number>`count(*) filter (where ${articleTopics.publishedAt} < ${sinceDate})::int`,
+        current: sql<number>`count(*) filter (where ${articleTopics.publishedAt} >= ${since}::timestamptz)::int`,
+        baseline: sql<number>`count(*) filter (where ${articleTopics.publishedAt} < ${since}::timestamptz)::int`,
       })
       .from(articleTopics)
       .groupBy(articleTopics.topic)

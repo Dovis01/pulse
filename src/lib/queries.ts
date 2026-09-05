@@ -180,62 +180,58 @@ export async function getFeedView(options: {
   const articles = await repo.listArticles({ ...options, limit: limit + 1 });
   const hasMore = articles.length > limit;
   const page = articles.slice(0, limit);
+
+  // Batched: one query for all clusters referenced on this page.
+  const clusterIds = [...new Set(page.map((a) => a.clusterId).filter((id): id is string => Boolean(id)))];
+  const clusterMap = new Map((await repo.getClusters(clusterIds)).map((c) => [c.id, c]));
+
   const [readSet, savedSet] = await Promise.all([repo.readIds(page.map((a) => a.id)), repo.savedIds()]);
-
-  const clusters = new Map<string, StoryCluster>();
-  for (const a of page) {
-    if (a.clusterId && !clusters.has(a.clusterId)) {
-      const c = await repo.getCluster(a.clusterId);
-      if (c) clusters.set(a.clusterId, c);
-    }
-  }
-
-  const rows: StoryRowView[] = page.map((a) => {
-    const cluster = a.clusterId ? clusters.get(a.clusterId) : undefined;
-    return {
-      article: a,
-      cluster,
-      read: readSet.has(a.id),
-      saved: savedSet.has(a.id),
-      sourceLabel: a.sourceName,
-      sourceCount: 1,
-    };
-  });
-  return {
-    rows,
-    nextCursor: hasMore ? page[page.length - 1]?.publishedAt : undefined,
-  };
+  const rows: StoryRowView[] = page.map((a) => ({
+    article: a,
+    cluster: a.clusterId ? clusterMap.get(a.clusterId) : undefined,
+    read: readSet.has(a.id),
+    saved: savedSet.has(a.id),
+    sourceLabel: a.sourceName,
+    sourceCount: 1,
+  }));
+  return { rows, nextCursor: hasMore ? page[page.length - 1]?.publishedAt : undefined };
 }
 
 export async function getForYouView(limit = 20): Promise<StoryRowView[]> {
   const repo = await getRepository();
   const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
-  const clusters = await repo.listClusters({ since, orderBy: "importance", limit: 60 });
-  const readSet = await repo.savedIds(); // cheap pre-warm; read set below
-  void readSet;
-  const ids = clusters.map((c) => c.id);
-  const savedSet = await repo.savedIds();
-  const articleIdsByCluster = new Map<string, string[]>();
-  for (const id of ids) {
-    const articles = await repo.clusterArticles(id);
-    articleIdsByCluster.set(id, articles.map((a) => a.id));
+  const [clusters, articles] = await Promise.all([
+    repo.listClusters({ since, orderBy: "importance", limit: 60 }),
+    repo.listArticles({ since, limit: 400 }),
+  ]);
+  const [readSet, savedSet] = await Promise.all([
+    repo.readIds(articles.map((a) => a.id)),
+    repo.savedIds(),
+  ]);
+  const byCluster = new Map<string, Article[]>();
+  for (const a of articles) {
+    if (!a.clusterId) continue;
+    const list = byCluster.get(a.clusterId) ?? [];
+    list.push(a);
+    byCluster.set(a.clusterId, list);
   }
-  const allArticleIds = [...articleIdsByCluster.values()].flat();
-  const readIds = await repo.readIds(allArticleIds);
 
   return clusters
     .map((c) => ({ c, final: computeForYouScore(c.importanceScore, c.relevanceScore) }))
     .filter(({ c }) => c.relevanceScore >= pulseConfig.scoring.forYouMinRelevance)
     .sort((a, b) => b.final - a.final)
     .slice(0, limit)
-    .map(({ c }, i) => ({
-      cluster: c,
-      read: (articleIdsByCluster.get(c.id) ?? []).some((id) => readIds.has(id)),
-      saved: (articleIdsByCluster.get(c.id) ?? []).some((id) => savedSet.has(id)),
-      rank: i + 1,
-      sourceLabel: `${c.sourceCount} source${c.sourceCount === 1 ? "" : "s"}`,
-      sourceCount: c.sourceCount,
-    }));
+    .map(({ c }, i) => {
+      const ids = (byCluster.get(c.id) ?? []).map((a) => a.id);
+      return {
+        cluster: c,
+        read: ids.some((id) => readSet.has(id)),
+        saved: ids.some((id) => savedSet.has(id)),
+        rank: i + 1,
+        sourceLabel: `${c.sourceCount} source${c.sourceCount === 1 ? "" : "s"}`,
+        sourceCount: c.sourceCount,
+      };
+    });
 }
 
 export async function getSavedView(): Promise<StoryRowView[]> {
@@ -255,21 +251,30 @@ export async function getSavedView(): Promise<StoryRowView[]> {
 export async function getBreakingView(limit = 20): Promise<StoryRowView[]> {
   const repo = await getRepository();
   const since = new Date(Date.now() - 24 * 3_600_000).toISOString();
-  const clusters = await repo.listClusters({ since, orderBy: "breaking", limit: limit * 2 });
-  const picked = clusters
-    .filter((c) => c.breakingScore > pulseConfig.scoring.breakingThreshold - 20)
-    .slice(0, limit);
-  const savedSet = await repo.savedIds();
-  const readIds = await repo.readIds(
-    (await Promise.all(picked.map((c) => repo.clusterArticles(c.id)))).flat().map((a) => a.id),
-  );
+  const [clusters, articles] = await Promise.all([
+    repo.listClusters({ since, orderBy: "breaking", limit: limit * 3 }),
+    repo.listArticles({ since, limit: 400 }),
+  ]);
+  const [readSet, savedSet] = await Promise.all([
+    repo.readIds(articles.map((a) => a.id)),
+    repo.savedIds(),
+  ]);
+  const byCluster = new Map<string, Article[]>();
+  for (const a of articles) {
+    if (!a.clusterId) continue;
+    const list = byCluster.get(a.clusterId) ?? [];
+    list.push(a);
+    byCluster.set(a.clusterId, list);
+  }
+
   const out: StoryRowView[] = [];
-  for (const c of picked) {
-    const articles = await repo.clusterArticles(c.id);
-    const ids = articles.map((a) => a.id);
+  for (const c of clusters) {
+    if (c.breakingScore <= pulseConfig.scoring.breakingThreshold - 20) continue;
+    if (out.length >= limit) break;
+    const ids = (byCluster.get(c.id) ?? []).map((a) => a.id);
     out.push({
       cluster: c,
-      read: ids.some((id) => readIds.has(id)),
+      read: ids.some((id) => readSet.has(id)),
       saved: ids.some((id) => savedSet.has(id)),
       sourceLabel: `${c.sourceCount} source${c.sourceCount === 1 ? "" : "s"}`,
       sourceCount: c.sourceCount,
@@ -405,18 +410,6 @@ export async function getTopicView(slug: string): Promise<{
       alias.categories.map((category) => repo.listArticles({ category, since, limit: 40 })),
     );
     for (const list of perCategory) {
-      for (const a of list) {
-        if (!seen.has(a.id)) {
-          seen.add(a.id);
-          articles.push(a);
-        }
-      }
-    }
-    // Free-text topics/entities also match this topic page.
-    const perTerm = await Promise.all(
-      alias.terms.map((term) => repo.listArticles({ topic: term, since, limit: 20 })),
-    );
-    for (const list of perTerm) {
       for (const a of list) {
         if (!seen.has(a.id)) {
           seen.add(a.id);

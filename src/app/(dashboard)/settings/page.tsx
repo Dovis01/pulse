@@ -5,7 +5,7 @@ import { getRepository } from "@/lib/db";
 import { getSystemStatus } from "@/lib/system/status";
 import { relativeTime } from "@/lib/time/format";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30; // cached briefly — system stats tolerate 30s staleness
 export const metadata = { title: "Settings" };
 
 const SECTIONS = [

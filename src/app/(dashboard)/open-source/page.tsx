@@ -4,7 +4,7 @@ import { getRepository } from "@/lib/db";
 import { pulseConfig } from "@config/pulse.config";
 import { sinceHoursAgoIso } from "@/lib/time/format";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: instant navigation, fresh every minute
 export const metadata = { title: "Open Source Intelligence" };
 
 export default async function OpenSourcePage() {

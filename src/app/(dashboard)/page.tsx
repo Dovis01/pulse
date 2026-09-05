@@ -4,7 +4,7 @@ import { IntelligenceRail } from "@/components/layout/intelligence-rail";
 import { getTodayView } from "@/lib/queries";
 import { greeting, longDate, relativeTime } from "@/lib/time/format";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: instant navigation, fresh every minute
 
 /**
  * Today (product spec §9/§75) — hierarchy is fixed:

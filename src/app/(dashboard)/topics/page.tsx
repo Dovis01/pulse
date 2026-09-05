@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getRepository } from "@/lib/db";
 import { sinceHoursAgoIso } from "@/lib/time/format";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: instant navigation, fresh every minute
 export const metadata = { title: "Topics" };
 
 export default async function TopicsPage() {

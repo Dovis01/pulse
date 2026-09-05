@@ -1,7 +1,7 @@
 import { StoryRow } from "@/components/news/story-row";
 import { getForYouView } from "@/lib/queries";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: instant navigation, fresh every minute
 export const metadata = { title: "For You" };
 
 export default async function ForYouPage() {

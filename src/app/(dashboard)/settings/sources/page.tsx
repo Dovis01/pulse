@@ -2,7 +2,7 @@ import { toggleSource } from "@/lib/actions";
 import { getSourcesView } from "@/lib/queries";
 import { relativeTime } from "@/lib/time/format";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 30; // cached briefly — system stats tolerate 30s staleness
 export const metadata = { title: "Manage Sources" };
 
 export default async function ManageSourcesPage() {

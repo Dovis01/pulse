@@ -3,7 +3,7 @@ import { BriefBody } from "@/components/brief/brief-body";
 import { getBriefView } from "@/lib/queries";
 import { relativeTime } from "@/lib/time/format";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: instant navigation, fresh every minute
 export const metadata = { title: "Daily Brief" };
 
 export default async function BriefPage() {

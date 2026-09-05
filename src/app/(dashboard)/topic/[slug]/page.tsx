@@ -1,12 +1,9 @@
 import { StoryRow } from "@/components/news/story-row";
 import { getTopicView } from "@/lib/queries";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
+export const metadata = { title: "Topic" }; // ISR: instant navigation, fresh every minute
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  return { title: decodeURIComponent(slug).replace(/-/g, " ") };
-}
 
 export default async function TopicPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

@@ -1,6 +1,6 @@
 import { getTrendingSignals } from "@/lib/queries";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: instant navigation, fresh every minute
 export const metadata = { title: "Trending" };
 
 export default async function TrendingPage() {

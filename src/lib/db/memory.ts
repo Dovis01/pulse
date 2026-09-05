@@ -182,6 +182,12 @@ export class MemoryRepository implements Repository {
     this.store.clusters.set(cluster.id, cluster);
   }
 
+  async getClusters(ids: string[]): Promise<StoryCluster[]> {
+    return ids
+      .map((id) => this.store.clusters.get(id))
+      .filter((c): c is StoryCluster => Boolean(c));
+  }
+
   async getCluster(idOrSlug: string): Promise<StoryCluster | null> {
     const byId = this.store.clusters.get(idOrSlug);
     if (byId) return byId;

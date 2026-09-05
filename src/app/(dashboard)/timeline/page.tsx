@@ -3,7 +3,7 @@ import { CategoryDot, categoryLabel } from "@/components/news/category";
 import { getTimelineView } from "@/lib/queries";
 import { absoluteTime } from "@/lib/time/format";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: instant navigation, fresh every minute
 export const metadata = { title: "Timeline" };
 
 export default async function TimelinePage() {

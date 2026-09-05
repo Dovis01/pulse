@@ -7,12 +7,15 @@ import type { SystemStatus } from "@/lib/news/types";
 /** Settings → System (product spec §68) + provider health (cost §97). */
 export async function getSystemStatus(): Promise<SystemStatus> {
   const repo = await getRepository();
-  const runs = await repo.recentRuns(30);
+  // Fan out — this endpoint feeds the Settings page on every visit.
+  const [runs, articleCount, clusterCount, brief] = await Promise.all([
+    repo.recentRuns(30),
+    repo.countArticles(),
+    repo.countClusters(),
+    repo.latestBrief(),
+  ]);
   const lastRun = runs[0];
   const lastSuccessful = runs.find((r) => r.created > 0 && r.finishedAt);
-  const articleCount = await repo.countArticles();
-  const clusterCount = await repo.countClusters();
-  const brief = await repo.latestBrief();
 
   const providerLastRun = new Map<string, (typeof runs)[number]>();
   for (const run of runs) {

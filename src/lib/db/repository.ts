@@ -93,6 +93,8 @@ export interface Repository {
   activeClusters(windowHours: number, limit?: number): Promise<StoryCluster[]>;
   upsertCluster(cluster: StoryCluster): Promise<void>;
   getCluster(idOrSlug: string): Promise<StoryCluster | null>;
+  /** Batched cluster fetch — keeps feed rendering off the N+1 path. */
+  getClusters(ids: string[]): Promise<StoryCluster[]>;
   linkArticleCluster(articleId: string, clusterId: string): Promise<void>;
   clusterArticles(clusterId: string): Promise<Article[]>;
   listClusters(query: ClusterQuery): Promise<StoryCluster[]>;

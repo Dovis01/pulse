@@ -3,7 +3,7 @@ import { categoryLabel } from "@/components/news/category";
 import { getSourcesView } from "@/lib/queries";
 import { relativeTime } from "@/lib/time/format";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60; // ISR: instant navigation, fresh every minute
 export const metadata = { title: "Sources" };
 
 export default async function SourcesPage() {
