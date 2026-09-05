@@ -191,14 +191,26 @@ export class PgRepository implements Repository {
   }
 
   async markSourceFetched(id: string, at: string, metadata?: Record<string, unknown>): Promise<void> {
-    if (metadata) {
-      const [current] = await this.db.select().from(sources).where(eq(sources.id, id));
+    await this.markSourcesFetched([{ id, at, metadata }]);
+  }
+
+  async markSourcesFetched(
+    entries: { id: string; at: string; metadata?: Record<string, unknown> }[],
+  ): Promise<void> {
+    if (entries.length === 0) return;
+    const at = new Date(entries[0]!.at);
+    await this.db
+      .update(sources)
+      .set({ lastFetchedAt: at })
+      .where(inArray(sources.id, entries.map((e) => e.id)));
+    for (const entry of entries) {
+      if (!entry.metadata) continue;
       await this.db
         .update(sources)
-        .set({ lastFetchedAt: new Date(at), metadata: { ...(current?.metadata ?? {}), ...metadata } })
-        .where(eq(sources.id, id));
-    } else {
-      await this.db.update(sources).set({ lastFetchedAt: new Date(at) }).where(eq(sources.id, id));
+        .set({
+          metadata: sql`coalesce(${sources.metadata}, '{}'::jsonb) || ${JSON.stringify(entry.metadata)}::jsonb`,
+        })
+        .where(eq(sources.id, entry.id));
     }
   }
 

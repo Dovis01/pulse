@@ -40,8 +40,8 @@ export async function fetchGdelt(source: NewsSource): Promise<RawArticle[]> {
     sort: "datedesc",
   });
   const data = await fetchJson<GdeltResponse>(`${source.url}?${params.toString()}`, {
-    timeoutMs: 15_000,
-    retries: 1,
+    timeoutMs: 10_000,
+    retries: 0,
     label: "gdelt",
   });
 

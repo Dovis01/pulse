@@ -18,8 +18,8 @@ export async function fetchArxiv(source: NewsSource): Promise<RawArticle[]> {
     max_results: "40",
   });
   const xml = await fetchText(`${source.url}?${params.toString()}`, {
-    timeoutMs: 20_000,
-    retries: 1,
+    timeoutMs: 10_000,
+    retries: 0,
     label: "arxiv",
   });
 

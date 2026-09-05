@@ -27,8 +27,8 @@ export async function fetchWithRetry(
   url: string,
   options: FetchOptions = {},
 ): Promise<Response> {
-  const timeoutMs = options.timeoutMs ?? 12_000;
-  const retries = options.retries ?? 2;
+  const timeoutMs = options.timeoutMs ?? 8_000;
+  const retries = options.retries ?? 1;
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= retries; attempt += 1) {

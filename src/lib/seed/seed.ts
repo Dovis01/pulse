@@ -214,9 +214,7 @@ export function buildSeedData(now = new Date()): SeedResult {
   const articles: Article[] = [];
   const clusters: StoryCluster[] = [];
 
-  let counter = 0;
-  // Slug suffix (readable) — article/cluster ids stay real UUIDs for Postgres.
-  const nextSlugSuffix = () => `${(counter += 1)}-${Math.floor(rand() * 1e6).toString(16)}`;
+  // Article/cluster ids are real UUIDs for Postgres compatibility.
   const nextId = () => crypto.randomUUID();
 
   const makeArticle = (
@@ -240,7 +238,6 @@ export function buildSeedData(now = new Date()): SeedResult {
     });
     const classified = classifyRules(`${title}. ${description}`, source.category);
     const id = nextId();
-    const slugSuffix = nextSlugSuffix();
     return {
       id,
       sourceId,

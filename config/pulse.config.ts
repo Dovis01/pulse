@@ -66,7 +66,7 @@ export const pulseConfig = {
     query:
       '(artificial intelligence OR "large language model" OR semiconductor OR cybersecurity) sourcelang:english',
     timespan: "1h",
-    maxRecords: 75,
+    maxRecords: 50,
   },
 
   interests: [

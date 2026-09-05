@@ -18,14 +18,14 @@ interface HnItem {
   text?: string;
 }
 
-const STORY_LIMIT = 12;
+const STORY_LIMIT = 8;
 
 export async function fetchHackerNews(source: NewsSource): Promise<RawArticle[]> {
   const base = source.url.replace(/\/$/, "");
   const [topIds, bestIds, showIds] = await Promise.all([
-    fetchJson<number[]>(`${base}/topstories.json`, { label: "hn-top", retries: 1 }),
-    fetchJson<number[]>(`${base}/beststories.json`, { label: "hn-best", retries: 1 }),
-    fetchJson<number[]>(`${base}/showstories.json`, { label: "hn-show", retries: 1 }).catch(() => [] as number[]),
+    fetchJson<number[]>(`${base}/topstories.json`, { label: "hn-top", retries: 0 }),
+    fetchJson<number[]>(`${base}/beststories.json`, { label: "hn-best", retries: 0 }),
+    fetchJson<number[]>(`${base}/showstories.json`, { label: "hn-show", retries: 0 }).catch(() => [] as number[]),
   ]);
 
   const seen = new Set<number>();
@@ -45,7 +45,7 @@ export async function fetchHackerNews(source: NewsSource): Promise<RawArticle[]>
 
   const items = await Promise.allSettled(
     ids.map(async ({ id, list }) => {
-      const item = await fetchJson<HnItem>(`${base}/item/${id}.json`, { label: "hn-item", retries: 1 });
+      const item = await fetchJson<HnItem>(`${base}/item/${id}.json`, { label: "hn-item", retries: 0 });
       return { item, list };
     }),
   );

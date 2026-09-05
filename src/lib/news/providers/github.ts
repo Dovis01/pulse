@@ -38,17 +38,18 @@ export async function fetchGithub(source: NewsSource, now = new Date()): Promise
   const cutoff = now.getTime() - 48 * 3_600_000;
   const articles: RawArticle[] = [];
 
-  for (const repo of repos) {
-    try {
+  const repoResults = await Promise.allSettled(
+    repos.map(async (repo) => {
+      const out: RawArticle[] = [];
       const releases = await fetchJson<GhRelease[]>(`https://api.github.com/repos/${repo}/releases?per_page=3`, {
         headers: headers(),
         label: `github:${repo}`,
-        retries: 1,
-      });
-      for (const release of releases ?? []) {
+        retries: 0,
+      }).catch(() => [] as GhRelease[]);
+      for (const release of releases) {
         const publishedAt = release.published_at ? new Date(release.published_at) : now;
         if (publishedAt.getTime() < cutoff) continue;
-        articles.push({
+        out.push({
           externalId: `gh-release-${release.id}`,
           url: release.html_url ?? `https://github.com/${repo}/releases`,
           title: `${repo} released ${release.name ?? release.tag_name ?? "a new version"}`,
@@ -64,13 +65,13 @@ export async function fetchGithub(source: NewsSource, now = new Date()): Promise
       const pulls = await fetchJson<GhPull[]>(`https://api.github.com/repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=10`, {
         headers: headers(),
         label: `github:${repo}`,
-        retries: 1,
-      });
-      for (const pr of pulls ?? []) {
+        retries: 0,
+      }).catch(() => [] as GhPull[]);
+      for (const pr of pulls) {
         if (!pr.merged_at) continue;
         const mergedAt = new Date(pr.merged_at);
         if (mergedAt.getTime() < cutoff) continue;
-        articles.push({
+        out.push({
           externalId: `gh-pr-${pr.id}`,
           url: pr.html_url ?? `https://github.com/${repo}/pulls`,
           title: `${repo} merged PR #${pr.number}: ${pr.title ?? "untitled"}`,
@@ -82,10 +83,12 @@ export async function fetchGithub(source: NewsSource, now = new Date()): Promise
           metadata: { kind: "merged_pr", repo, prNumber: pr.number },
         });
       }
-    } catch {
-      // Per-repo isolation: one failing repo must not break the batch.
-      continue;
-    }
+      return out;
+    }),
+  );
+  // Per-repo isolation: one failing repo must not break the batch.
+  for (const r of repoResults) {
+    if (r.status === "fulfilled") articles.push(...r.value);
   }
 
   return articles;

@@ -34,7 +34,7 @@ export interface IngestionSummary {
 }
 
 /** Keep each serverless invocation small (cost spec §74: incremental). */
-export const MAX_ARTICLES_PER_PROVIDER_RUN = 60;
+export const MAX_ARTICLES_PER_PROVIDER_RUN = 12;
 
 /** Sources due for refresh inside this cron group (incremental, small). */
 export function selectDueSources(sources: NewsSource[], group: CronGroup, now = new Date()): NewsSource[] {
@@ -100,27 +100,23 @@ function normalizeIncoming(
 /**
  * Attach (or create) the story cluster for one article, then recompute the
  * cluster's aggregate scores. Returns the affected cluster.
+ *
+ * `seeds` carries the run-scoped active-cluster snapshot so hot paths don't
+ * re-query the store per article (serverless time budget); pass a Map that
+ * lives across the whole ingestion run.
  */
-async function attachToCluster(repo: Repository, article: import("./types").Article, now: Date): Promise<StoryCluster> {
+async function attachToCluster(
+  repo: Repository,
+  article: import("./types").Article,
+  now: Date,
+  seeds: Map<string, ClusterSeed>,
+): Promise<string> {
   const windowHours = pulseConfig.scoring.clusterTimeWindowHours;
-  const active = await repo.activeClusters(windowHours);
-  const seeds: ClusterSeed[] = active.map((c) => ({
-    id: c.id,
-    canonicalTitle: c.canonicalTitle,
-    category: c.category,
-    entities: c.entities,
-    topics: c.topics,
-    countries: c.countries,
-    sourceNames: [],
-    createdAt: new Date(c.firstSeenAt),
-    updatedAt: new Date(c.lastUpdatedAt),
-    tokenSample: tokenSampleOf(c.canonicalTitle),
-  }));
 
   const tokens = titleTokens(article.title);
   let matched: ClusterSeed | null = null;
   let bestSimilarity = 0;
-  for (const seed of seeds) {
+  for (const seed of seeds.values()) {
     const result = shouldJoinCluster(
       tokens,
       article.entities,
@@ -140,10 +136,11 @@ async function attachToCluster(repo: Repository, article: import("./types").Arti
   if (matched) {
     await repo.linkArticleCluster(article.id, matched.id);
     article.clusterId = matched.id;
-    return await recomputeCluster(repo, matched.id, now);
+    return matched.id;
   }
 
-  // New cluster.
+  // New cluster (written immediately so the FK for links resolves; the
+  // expensive recompute happens once per batch for affected clusters).
   const id = crypto.randomUUID();
   const cluster: StoryCluster = {
     id,
@@ -167,7 +164,23 @@ async function attachToCluster(repo: Repository, article: import("./types").Arti
   await repo.upsertCluster(cluster);
   await repo.linkArticleCluster(article.id, id);
   article.clusterId = id;
-  return await recomputeCluster(repo, id, now);
+  seedFromCluster(cluster, seeds);
+  return id;
+}
+
+function seedFromCluster(cluster: StoryCluster, seeds: Map<string, ClusterSeed>): void {
+  seeds.set(cluster.id, {
+    id: cluster.id,
+    canonicalTitle: cluster.canonicalTitle,
+    category: cluster.category,
+    entities: cluster.entities,
+    topics: cluster.topics,
+    countries: cluster.countries,
+    sourceNames: [],
+    createdAt: new Date(cluster.firstSeenAt),
+    updatedAt: new Date(cluster.lastUpdatedAt),
+    tokenSample: tokenSampleOf(cluster.canonicalTitle),
+  });
 }
 
 /** Recompute aggregates + scores for a cluster from its articles. */
@@ -356,12 +369,30 @@ export async function runIngestion(
 
   const interests = await repo.getInterests();
   const sourceById = new Map(allSources.map((s) => [s.id, s]));
-  const fetches = await fetchProviders(grouped as Map<import("./types").ProviderId, NewsSource[]>);
+    const fetches = await fetchProviders(grouped as Map<import("./types").ProviderId, NewsSource[]>);
 
   // Accumulate dedup scope once (recent window) to keep the pass incremental.
-  const dedupScope = await repo.recentTitlesForDedup(pulseConfig.scoring.dedupTimeWindowHours);
+    const dedupScope = await repo.recentTitlesForDedup(pulseConfig.scoring.dedupTimeWindowHours);
+
+  // Run-scoped cluster seed snapshot — hot path stays off the database.
+  const clusterSeeds = new Map<string, import("./clustering").ClusterSeed>();
+  for (const c of await repo.activeClusters(pulseConfig.scoring.clusterTimeWindowHours)) {
+    clusterSeeds.set(c.id, {
+      id: c.id,
+      canonicalTitle: c.canonicalTitle,
+      category: c.category,
+      entities: c.entities,
+      topics: c.topics,
+      countries: c.countries,
+      sourceNames: [],
+      createdAt: new Date(c.firstSeenAt),
+      updatedAt: new Date(c.lastUpdatedAt),
+      tokenSample: tokenSampleOf(c.canonicalTitle),
+    });
+  }
   const seenUrls = new Set<string>();
   const seenTitles: { canonicalUrl: string; title: string; publishedAt: string }[] = [];
+  const pendingSourceMarks: { id: string; at: string; metadata?: Record<string, unknown> }[] = [];
 
   for (const fetch of fetches) {
     const runId = crypto.randomUUID();
@@ -440,8 +471,14 @@ export async function runIngestion(
       await repo.recordUsage("articles_fetched", 1);
       await repo.recordUsage("articles_created", 1);
 
-      const cluster = await attachToCluster(repo, article, now);
-      affectedClusters.add(cluster.id);
+      const clusterId = await attachToCluster(repo, article, now, clusterSeeds);
+      affectedClusters.add(clusterId);
+    }
+    // One recompute per affected cluster per batch (not per article) —
+    // keeps the Neon round-trip count inside the serverless budget.
+        for (const clusterId of affectedClusters) {
+      const updated = await recomputeCluster(repo, clusterId, now);
+      seedFromCluster(updated, clusterSeeds);
     }
 
     // Enqueue AI summaries for important clusters only (cost §53/§58).
@@ -456,13 +493,15 @@ export async function runIngestion(
         await repo.enqueueJob("summarize-cluster", { clusterId });
       }
     }
-
-    // Mark sources fetched (with conditional-cache metadata).
+        // Collect source marks for one batched write after the run records.
     for (const outcome of fetch.outcomes) {
       if (outcome.error) summary.failed += 1;
-      await repo.markSourceFetched(outcome.sourceId, now.toISOString(), outcome.conditional);
+      pendingSourceMarks.push({
+        id: outcome.sourceId,
+        at: now.toISOString(),
+        metadata: outcome.conditional,
+      });
     }
-
     await repo.finishRun(runId, {
       finishedAt: new Date().toISOString(),
       fetched: batch.length,
@@ -471,11 +510,13 @@ export async function runIngestion(
       failed: fetch.outcomes.filter((o) => o.error).length,
     });
   }
+  // One batched write for all source refresh marks (serverless budget).
+  await repo.markSourcesFetched(pendingSourceMarks);
 
   // Process queued jobs in small batches (cost §80).
-  summary.summariesGenerated = await processJobs(repo);
+    summary.summariesGenerated = await processJobs(repo);
 
-  // Breaking alerts (Telegram first — spec §84).
+    // Breaking alerts (Telegram first — spec §84).
   summary.alertsSent = await processBreakingAlerts(repo);
 
   return summary;

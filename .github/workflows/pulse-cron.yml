@@ -1,0 +1,59 @@
+# Pulse scheduled ingestion (Hobby-compatible, $0).
+#
+# Vercel Hobby restricts built-in crons to once per day, so GitHub Actions
+# (free on public repos) drives the high-frequency groups. vercel.json keeps
+# a single daily Vercel cron as a fallback only when Actions is paused.
+#
+#   fast   — every 15 min (breaking RSS, GDELT, HN, GitHub watchlist)
+#   normal — hourly (blogs, arXiv)
+#   daily  — 07:30 & 18:00 JST (brief + digest + retention)
+
+name: pulse-cron
+
+on:
+  schedule:
+    - cron: "*/15 * * * *" # fast
+    - cron: "5 * * * *" # normal
+    - cron: "30 22 * * *" # daily morning (07:30 JST)
+    - cron: "0 9 * * *" # daily evening (18:00 JST)
+  workflow_dispatch:
+    inputs:
+      group:
+        description: "Cron group to run"
+        required: true
+        default: fast
+        type: choice
+        options: [fast, normal, daily]
+
+concurrency:
+  group: pulse-${{ github.event.schedule || inputs.group }}
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Resolve group
+        id: group
+        run: |
+          SCHEDULE='${{ github.event.schedule }}'
+          case "$SCHEDULE" in
+            "*/15 * * * *") echo "group=fast" >> "$GITHUB_OUTPUT" ;;
+            "5 * * * *")    echo "group=normal" >> "$GITHUB_OUTPUT" ;;
+            "30 22 * * *")  echo "group=daily" >> "$GITHUB_OUTPUT" ;;
+            "0 9 * * *")    echo "group=daily" >> "$GITHUB_OUTPUT" ;;
+            *)              echo "group=${{ inputs.group || 'fast' }}" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Call Pulse cron endpoint
+        env:
+          PULSE_URL: ${{ secrets.PULSE_URL }}
+          PULSE_CRON_SECRET: ${{ secrets.PULSE_CRON_SECRET }}
+        run: |
+          GROUP="${{ steps.group.outputs.group }}"
+          echo "Triggering /api/cron/$GROUP …"
+          curl -fsS --max-time 240 -X POST \
+            -H "Authorization: Bearer $PULSE_CRON_SECRET" \
+            -H "content-type: application/json" \
+            "$PULSE_URL/api/cron/$GROUP" | head -c 600; echo

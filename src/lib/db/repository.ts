@@ -76,6 +76,8 @@ export interface Repository {
   listSources(): Promise<NewsSource[]>;
   saveSource(source: NewsSource): Promise<void>;
   markSourceFetched(id: string, at: string, metadata?: Record<string, unknown>): Promise<void>;
+  /** Batch variant — one round-trip for a whole cron pass (serverless budget). */
+  markSourcesFetched(entries: { id: string; at: string; metadata?: Record<string, unknown> }[]): Promise<void>;
 
   // ── articles ──
   findArticleByCanonicalUrl(url: string): Promise<Article | null>;

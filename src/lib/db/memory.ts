@@ -94,10 +94,18 @@ export class MemoryRepository implements Repository {
   }
 
   async markSourceFetched(id: string, at: string, metadata?: Record<string, unknown>): Promise<void> {
-    const s = this.store.sources.get(id);
-    if (s) {
-      s.lastFetchedAt = at;
-      if (metadata) s.metadata = { ...(s.metadata ?? {}), ...metadata };
+    await this.markSourcesFetched([{ id, at, metadata }]);
+  }
+
+  async markSourcesFetched(
+    entries: { id: string; at: string; metadata?: Record<string, unknown> }[],
+  ): Promise<void> {
+    for (const { id, at, metadata } of entries) {
+      const s = this.store.sources.get(id);
+      if (s) {
+        s.lastFetchedAt = at;
+        if (metadata) s.metadata = { ...(s.metadata ?? {}), ...metadata };
+      }
     }
   }
 

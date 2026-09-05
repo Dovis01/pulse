@@ -150,7 +150,7 @@ async function fetchWithConditional(
   url: string,
   headers: Record<string, string>,
 ): Promise<{ status: number; body: string; etag?: string; lastModified?: string }> {
-  const response = await fetchWithRetry(url, { headers, timeoutMs: 12_000, retries: 1 });
+  const response = await fetchWithRetry(url, { headers, timeoutMs: 8_000, retries: 0 });
   if (response.status === 304) {
     return { status: 304, body: "" };
   }
