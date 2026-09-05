@@ -5,7 +5,7 @@ import { PgRepository } from "../src/lib/db/pg";
 /**
  * Seed the Postgres database (product spec §101): sources + interests +
  * 50 sample articles across ≥10 clusters. Safe to re-run.
- * Usage: npm run db:seed  (requires DATABASE_URL)
+ * Usage: npm run db:seed [-- --reset]  (requires DATABASE_URL)
  */
 
 async function main(): Promise<void> {
@@ -18,6 +18,10 @@ async function main(): Promise<void> {
   console.log("Seeding Postgres…");
   const repo = new PgRepository(url);
   await repo.init();
+  if (process.argv.includes("--reset")) {
+    console.log("Resetting corpus (keeping sources)…");
+    await repo.resetCorpusForReseed();
+  }
   await seedRepository(repo);
   const articles = await repo.countArticles();
   const clusters = await repo.countClusters();

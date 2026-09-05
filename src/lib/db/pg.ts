@@ -841,6 +841,16 @@ export class PgRepository implements Repository {
     return rows.map(rowToArticle);
   }
 
+  /** Wipe the article corpus + derived tables (sources/interests kept). */
+  async resetCorpusForReseed(): Promise<void> {
+    await this.client.unsafe(`
+      truncate table article_cluster_links, article_topics, article_entities,
+        read_history, saved_articles, articles, story_clusters, daily_briefs,
+        ingestion_jobs, ingestion_runs, usage_events, notifications, topics, entities
+      restart identity cascade
+    `);
+  }
+
   async close(): Promise<void> {
     await this.client.end();
   }

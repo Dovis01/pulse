@@ -26,7 +26,7 @@ export default async function StoryPage({ params }: { params: Promise<{ slug: st
   const primary = articles[0];
 
   const summary = cluster.summaryFull ?? cluster.summaryShort ?? articles[0]?.description;
-  const hasAiSummary = Boolean(cluster.summaryGeneratedAt);
+  const hasAiSummary = Boolean(cluster.summaryModel);
 
   return (
     <div className="px-6 pb-16 md:px-10">
@@ -70,19 +70,25 @@ export default async function StoryPage({ params }: { params: Promise<{ slug: st
         )}
       </div>
 
-      {/* AI SUMMARY */}
+      {/* SUMMARY */}
       {summary && (
         <section className="mt-10 max-w-[52rem]">
           <div className="section-rule pb-2 pt-4">
             <h2 className="meta-label !text-secondary">
-              {hasAiSummary ? `AI Summary · ${cluster.summaryModel ?? ""}` : "Summary"}
+              {hasAiSummary
+                ? `AI Summary · ${cluster.summaryModel ?? ""}`
+                : `Summary · composed from ${cluster.sourceCount} report${cluster.sourceCount === 1 ? "" : "s"}`}
             </h2>
           </div>
           <p className="mt-4 whitespace-pre-line text-[16px] leading-[1.8] text-foreground">{summary}</p>
-          {hasAiSummary && (
+          {hasAiSummary ? (
             <p className="meta-mono mt-3 text-[10.5px]">
               AI-generated summary · {cluster.summaryVersion} · {relativeTime(cluster.summaryGeneratedAt!)} ·
               always verify against the original sources below.
+            </p>
+          ) : (
+            <p className="meta-mono mt-3 text-[10.5px]">
+              Rule-based aggregation of source reports · add GEMINI_API_KEY to enable AI synthesis.
             </p>
           )}
         </section>

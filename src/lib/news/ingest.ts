@@ -33,6 +33,9 @@ export interface IngestionSummary {
   runIds: string[];
 }
 
+/** Keep each serverless invocation small (cost spec §74: incremental). */
+export const MAX_ARTICLES_PER_PROVIDER_RUN = 60;
+
 /** Sources due for refresh inside this cron group (incremental, small). */
 export function selectDueSources(sources: NewsSource[], group: CronGroup, now = new Date()): NewsSource[] {
   return sources.filter((s) => {
@@ -221,8 +224,64 @@ export async function recomputeCluster(repo: Repository, clusterId: string, now:
     isBreaking: breaking > pulseConfig.scoring.breakingThreshold,
     clusterHash: clusterHash(clusterArticles.map((a) => a.id)),
   };
+
+  // Rule-based multi-source summary so every cluster reads well without AI.
+  // AI later overwrites it (summaryModel stays unset until an AI pass).
+  if (!updated.summaryShort) {
+    const rule = composeClusterSummaryRule(clusterArticles);
+    updated.summaryShort = rule.short;
+    updated.summaryFull = updated.summaryFull ?? rule.full;
+    updated.summaryVersion = "rule-v1";
+    updated.whyItMatters = updated.whyItMatters ?? rule.whyItMatters;
+    updated.keyPoints = updated.keyPoints ?? rule.keyPoints;
+  }
+
   await repo.upsertCluster(updated);
   return updated;
+}
+
+/**
+ * Compose a cluster summary from its member reports — deterministic,
+ * source-attributed, no AI (aggregator mode, cost spec §62).
+ */
+export function composeClusterSummaryRule(articles: import("./types").Article[]): {
+  short?: string;
+  full?: string;
+  whyItMatters?: string;
+  keyPoints?: string[];
+} {
+  if (articles.length === 0) return {};
+  const ranked = [...articles].sort(
+    (a, b) => b.sourceAuthority - a.sourceAuthority || a.publishedAt.localeCompare(b.publishedAt),
+  );
+  const primary = ranked[0]!;
+  const clean = (t: string | undefined) => (t ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+
+  const short = clean(primary.description) || primary.title;
+
+  const pieces = ranked.slice(0, 3).map((a) => {
+    const d = clean(a.description);
+    return d.length > 0 ? `${a.sourceName} — ${d.slice(0, 260)}` : `${a.sourceName} — ${a.title}`;
+  });
+  const full = pieces.join("\n\n");
+
+  const keyPoints = ranked
+    .slice(0, 4)
+    .map((a) => {
+      const d = clean(a.description);
+      return d.length > 24 ? d.slice(0, 160) : a.title;
+    })
+    .filter((p, i, arr) => p.length > 0 && arr.indexOf(p) === i);
+
+  const topEntity = primary.entities[0];
+  const whyItMatters =
+    topEntity != null || primary.importanceScore >= 60
+      ? `Covered by ${new Set(articles.map((a) => a.sourceId)).size} source${
+          new Set(articles.map((a) => a.sourceId)).size === 1 ? "" : "s"
+        }${topEntity ? ` with focus on ${topEntity.replace(/\b\w/g, (c) => c.toUpperCase())}` : ""}; importance ${primary.importanceScore}.`
+      : undefined;
+
+  return { short: short.slice(0, 220) || undefined, full, whyItMatters, keyPoints };
 }
 
 /** AI summarization for one cluster — null-safe, budget-guarded. */
@@ -307,12 +366,21 @@ export async function runIngestion(
   for (const fetch of fetches) {
     const runId = crypto.randomUUID();
     summary.runIds.push(runId);
+
+    // Serverless-safe batch cap: one cron invocation processes at most this
+    // many items per provider, newest first; older items are picked up on
+    // the next scheduled run when the feed still returns them
+    // (cost spec §74–75).
+    const batch = [...fetch.articles]
+      .sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0))
+      .slice(0, MAX_ARTICLES_PER_PROVIDER_RUN);
+
     await repo.startRun({
       id: runId,
       provider: fetch.provider,
       group,
       startedAt: now.toISOString(),
-      fetched: fetch.articles.length,
+      fetched: batch.length,
       created: 0,
       duplicates: 0,
       failed: fetch.outcomes.filter((o) => o.error).length,
@@ -321,7 +389,7 @@ export async function runIngestion(
 
     const affectedClusters = new Set<string>();
 
-    for (const raw of fetch.articles) {
+    for (const raw of batch) {
       summary.fetched += 1;
       const identity = articleIdentity(raw);
       const verdict = dedupe(
@@ -397,7 +465,7 @@ export async function runIngestion(
 
     await repo.finishRun(runId, {
       finishedAt: new Date().toISOString(),
-      fetched: fetch.articles.length,
+      fetched: batch.length,
       created: summary.created,
       duplicates: summary.duplicates,
       failed: fetch.outcomes.filter((o) => o.error).length,

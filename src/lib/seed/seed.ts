@@ -5,6 +5,7 @@ import { articleIdentity, detectLanguage, slugify, truncate } from "@/lib/news/n
 import { DEFAULT_SOURCES } from "@/lib/news/registry";
 import type { Article, StoryCluster, UserInterest } from "@/lib/news/types";
 import { computeBreakingScore } from "@/lib/ranking/breaking";
+import { composeClusterSummaryRule } from "@/lib/news/ingest";
 import { computeImportance, entityImportanceScore, normalizeSourceCount } from "@/lib/ranking/importance";
 import { computeRelevance } from "@/lib/ranking/relevance";
 import { clusterVelocity } from "@/lib/ranking/velocity";
@@ -214,7 +215,9 @@ export function buildSeedData(now = new Date()): SeedResult {
   const clusters: StoryCluster[] = [];
 
   let counter = 0;
-  const nextId = () => `seed-${(counter += 1)}-${Math.floor(rand() * 1e6).toString(16)}`;
+  // Slug suffix (readable) — article/cluster ids stay real UUIDs for Postgres.
+  const nextSlugSuffix = () => `${(counter += 1)}-${Math.floor(rand() * 1e6).toString(16)}`;
+  const nextId = () => crypto.randomUUID();
 
   const makeArticle = (
     title: string,
@@ -237,6 +240,7 @@ export function buildSeedData(now = new Date()): SeedResult {
     });
     const classified = classifyRules(`${title}. ${description}`, source.category);
     const id = nextId();
+    const slugSuffix = nextSlugSuffix();
     return {
       id,
       sourceId,
@@ -317,7 +321,8 @@ export function buildSeedData(now = new Date()): SeedResult {
       lastUpdatedAt: clusterArticles[0]!.publishedAt,
       isBreaking: breaking > pulseConfig.scoring.breakingThreshold,
       clusterHash: clusterHash(clusterArticles.map((a) => a.id)),
-      summaryShort: undefined,
+      ...composeClusterSummaryRule(clusterArticles),
+      summaryVersion: "rule-v1",
     };
     clusters.push(cluster);
   }
@@ -401,10 +406,12 @@ export async function seedRepository(repo: Repository, options: { withArticles?:
   if (!withArticles) return;
 
   const { articles, clusters } = buildSeedData();
+  // Clusters first — article links carry an FK to them.
+  for (const c of clusters) await repo.upsertCluster(c);
   for (const a of articles) {
-    await repo.insertArticle(a);
+    const created = await repo.insertArticle(a);
+    if (!created) continue; // already present — skip dependants too
     await repo.recordArticleTaxonomy(a.id, a.publishedAt, a.topics, a.entities);
     if (a.clusterId) await repo.linkArticleCluster(a.id, a.clusterId);
   }
-  for (const c of clusters) await repo.upsertCluster(c);
 }
