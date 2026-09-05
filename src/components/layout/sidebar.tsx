@@ -73,7 +73,7 @@ export function Sidebar({ lastSync, live }: { lastSync?: string; live: boolean }
       </Link>
 
       <div className="flex-1">
-        <NavGroup title="Overview" links={TODAY.slice(1)} />
+        <NavGroup title="Overview" links={TODAY} />
         <NavGroup title="Topics" links={TOPICS} />
         <NavGroup title="Intelligence" links={INTELLIGENCE} />
         <NavGroup title="System" links={SYSTEM} />
