@@ -274,11 +274,15 @@ export class PgRepository implements Repository {
     if (query.minImportance) conditions.push(gte(articles.importanceScore, query.minImportance));
     if (query.topic)
       conditions.push(
-        sql`${articles.id} in (select article_id from article_topics where lower(topic) = ${query.topic.toLowerCase()})`,
+        sql`${articles.id} in (
+          select article_id from article_topics where lower(topic) like ${`%${query.topic.toLowerCase()}%`}
+          union
+          select article_id from article_entities where lower(entity) like ${`%${query.topic.toLowerCase()}%`}
+        )`,
       );
     if (query.entity)
       conditions.push(
-        sql`${articles.id} in (select article_id from article_entities where lower(entity) = ${query.entity.toLowerCase()})`,
+        sql`${articles.id} in (select article_id from article_entities where lower(entity) like ${`%${query.entity.toLowerCase()}%`})`,
       );
 
     const rows = await this.db

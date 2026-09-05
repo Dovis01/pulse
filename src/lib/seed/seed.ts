@@ -225,8 +225,11 @@ export function buildSeedData(now = new Date()): SeedResult {
   ): Article | null => {
     const source = SOURCE_BY_ID.get(sourceId);
     if (!source) return null;
+    // Seed links point at a live news search for the headline — always
+    // clickable, never a placeholder domain.
+    const url = `https://news.google.com/search?q=${encodeURIComponent(title)}&hl=en-US&gl=US&ceid=US:en`;
     const identity = articleIdentity({
-      url: `https://example.com/pulse-seed/${slugify(title, nextId())}`,
+      url,
       title,
       publishedAt,
       sourceId,

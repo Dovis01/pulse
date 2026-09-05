@@ -357,6 +357,34 @@ export async function getTimelineView(limit = 60): Promise<Article[]> {
   return repo.listArticles({ limit, orderBy: "published" });
 }
 
+/** Sidebar topic slugs → category + term aliases (topic pages). */
+const TOPIC_ALIASES: Record<string, { label: string; categories: Article["category"][]; terms: string[] }> = {
+  ai: {
+    label: "AI",
+    categories: ["AI"],
+    terms: ["artificial intelligence", "llm", "machine learning", "openai", "anthropic", "nvidia"],
+  },
+  technology: {
+    label: "Technology",
+    categories: ["Technology"],
+    terms: ["semiconductors", "technology", "cloud"],
+  },
+  "open-source": {
+    label: "Open Source",
+    categories: ["OpenSource"],
+    terms: ["open source", "github"],
+  },
+  markets: { label: "Markets", categories: ["Markets"], terms: ["markets", "finance", "fed"] },
+  business: { label: "Business", categories: ["Business"], terms: ["business", "regulation"] },
+  world: { label: "World", categories: ["World"], terms: ["world", "geopolitics"] },
+  science: { label: "Science", categories: ["Science"], terms: ["science", "research", "physics"] },
+  cybersecurity: {
+    label: "Cybersecurity",
+    categories: ["Cybersecurity"],
+    terms: ["cybersecurity", "security", "breach"],
+  },
+};
+
 export async function getTopicView(slug: string): Promise<{
   label: string;
   articles: Article[];
@@ -364,22 +392,52 @@ export async function getTopicView(slug: string): Promise<{
   total: number;
 } | null> {
   const repo = await getRepository();
-  const label = decodeURIComponent(slug).replace(/-/g, " ");
+  const raw = decodeURIComponent(slug).replace(/-/g, " ").trim();
+
+  // Canonical sidebar topics match by category + term aliases.
+  const alias = TOPIC_ALIASES[slug.toLowerCase()];
   const since = new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
-  const articles = await repo.listArticles({ topic: label, since, limit: 40 });
+  let articles: Article[] = [];
+
+  if (alias) {
+    const seen = new Set<string>();
+    const perCategory = await Promise.all(
+      alias.categories.map((category) => repo.listArticles({ category, since, limit: 40 })),
+    );
+    for (const list of perCategory) {
+      for (const a of list) {
+        if (!seen.has(a.id)) {
+          seen.add(a.id);
+          articles.push(a);
+        }
+      }
+    }
+    // Free-text topics/entities also match this topic page.
+    const perTerm = await Promise.all(
+      alias.terms.map((term) => repo.listArticles({ topic: term, since, limit: 20 })),
+    );
+    for (const list of perTerm) {
+      for (const a of list) {
+        if (!seen.has(a.id)) {
+          seen.add(a.id);
+          articles.push(a);
+        }
+      }
+    }
+    articles.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+    articles = articles.slice(0, 60);
+  } else {
+    articles = await repo.listArticles({ topic: raw, since, limit: 40 });
+  }
+
+  const label = alias?.label ?? raw.replace(/\b\w/g, (c) => c.toUpperCase());
   const byEntity = await repo.topEntities(since, 100);
   const entitySet = new Set(articles.flatMap((a) => a.entities.map((e) => e.toLowerCase())));
   const topEntities = byEntity
     .filter((e) => entitySet.has(e.label.toLowerCase()))
     .slice(0, 8)
     .map((e) => ({ label: e.label, current: e.current }));
-  const titleCase = label.replace(/\b\w/g, (c) => c.toUpperCase());
-  return {
-    label: titleCase,
-    articles,
-    topEntities,
-    total: articles.length,
-  };
+  return { label, articles, topEntities, total: articles.length };
 }
 
 export async function getSourcesView(): Promise<

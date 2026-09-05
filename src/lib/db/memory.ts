@@ -133,7 +133,14 @@ export class MemoryRepository implements Repository {
     if (query.category) items = items.filter((a) => a.category === query.category);
     if (query.provider) items = items.filter((a) => a.sourceProvider === query.provider);
     if (query.sourceId) items = items.filter((a) => a.sourceId === query.sourceId);
-    if (query.topic) items = items.filter((a) => a.topics.some((t) => t.toLowerCase() === query.topic!.toLowerCase()));
+    if (query.topic) {
+      const needle = query.topic.toLowerCase();
+      items = items.filter(
+        (a) =>
+          a.topics.some((t) => t.toLowerCase().includes(needle)) ||
+          a.entities.some((e) => e.toLowerCase().includes(needle)),
+      );
+    }
     if (query.entity) items = items.filter((a) => a.entities.some((e) => e.toLowerCase() === query.entity!.toLowerCase()));
     if (query.minImportance) items = items.filter((a) => a.importanceScore >= query.minImportance!);
     if (query.cursor) items = items.filter((a) => a.publishedAt < query.cursor!);
