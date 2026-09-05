@@ -23,7 +23,13 @@ export function StoryRowClient({ story }: { story: ApiStory }) {
           <span className="truncate">{categoryLabel(story.category)}</span>
           <span className="text-muted">· {relativeTimeClient(story.publishedAt)}</span>
         </div>
-        <div className="meta-mono flex-none text-[12px] tabular-nums text-secondary" title="Importance">
+        <div
+          className="meta-mono flex-none flex items-center gap-1.5 text-[12px] tabular-nums text-secondary"
+          title={`Importance ${story.importance}/100 — weighted from source authority, coverage breadth, velocity and recency`}
+        >
+          <span className="score-gauge" aria-hidden>
+            <span style={{ width: `${Math.max(0, Math.min(100, story.importance))}%` }} />
+          </span>
           {story.importance}
         </div>
       </div>

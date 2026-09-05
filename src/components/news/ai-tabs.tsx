@@ -20,17 +20,22 @@ export function AiTabs() {
     const active = TABS.find((t) => t.key === tab);
     if (!active) return;
     let cancelled = false;
-    setBusy(true);
+    // setState off the synchronous effect body (react-hooks/set-state-in-effect)
+    const busyTimer = setTimeout(() => {
+      if (!cancelled) setBusy(true);
+    }, 0);
     fetch(`/api/stories?${active.params}&limit=25`)
       .then((response) => (response.ok ? response.json() : { stories: [] }))
       .then((data: { stories: ApiStory[] }) => {
         if (!cancelled) setStories(data.stories ?? []);
       })
       .finally(() => {
+        clearTimeout(busyTimer);
         if (!cancelled) setBusy(false);
       });
     return () => {
       cancelled = true;
+      clearTimeout(busyTimer);
     };
   }, [tab]);
 

@@ -1,9 +1,27 @@
 import type { Category } from "./types";
+import { decodeEntities } from "./normalize";
 
 /**
  * Rule-based classification + entity extraction (cost spec §55–57).
  * AI is only a fallback for uncertain cases; these rules handle the bulk.
  */
+
+
+/** Word-boundary matcher — substring matching misfires badly
+ *  ("load-aware" → war, "europe" → eu, "feed" → fed). */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+const boundaryCache = new Map<string, RegExp>();
+function matchesTerm(haystack: string, term: string): boolean {
+  let re = boundaryCache.get(term);
+  if (!re) {
+    const escaped = escapeRegExp(term).replace(/\s+/g, "\\s+");
+    re = new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, "iu");
+    boundaryCache.set(term, re);
+  }
+  return re.test(haystack);
+}
 
 const CATEGORY_KEYWORDS: Record<Exclude<Category, "Other">, string[]> = {
   AI: [
@@ -78,13 +96,12 @@ export interface Classified {
 }
 
 export function extractEntities(text: string): { entities: string[]; importance: number } {
-  const lower = ` ${text.toLowerCase()} `;
+  const lower = decodeEntities(text).toLowerCase();
   const found = new Map<string, number>();
   for (const [entity, weight] of Object.entries(ENTITY_WEIGHTS)) {
     const needle = entity.trim();
     if (needle.length < 2) continue;
-    const idx = lower.indexOf(needle);
-    if (idx > 0) found.set(needle, weight);
+    if (matchesTerm(lower, needle)) found.set(needle, weight);
   }
   const entities = [...found.keys()];
   const importance = entities.length > 0 ? Math.max(...found.values()) : 0;
@@ -96,14 +113,14 @@ export function classifyRules(
   text: string,
   sourceCategory?: Category,
 ): Classified {
-  const lower = text.toLowerCase();
+  const lower = decodeEntities(text).toLowerCase();
 
   let best: { category: Category; hits: number } = { category: "Other", hits: 0 };
   let totalHits = 0;
   for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
     let hits = 0;
     for (const kw of keywords) {
-      if (lower.includes(kw)) hits += 1;
+      if (matchesTerm(lower, kw)) hits += 1;
     }
     totalHits += hits;
     if (hits > best.hits) best = { category: category as Category, hits };

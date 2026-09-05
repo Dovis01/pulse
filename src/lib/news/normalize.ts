@@ -91,10 +91,32 @@ export function detectLanguage(text: string, hint?: string): string {
   return "en";
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+  hellip: "…", mdash: "—", ndash: "–", rsquo: "'", lsquo: "'", rdquo: '"', ldquo: '"',
+};
+
+/** Decode common HTML entities so feed text never leaks `&#039;` into the UI. */
+export function decodeEntities(input: string): string {
+  if (!input.includes("&")) return input;
+  return input.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, code: string) => {
+    const lower = code.toLowerCase();
+    if (lower.startsWith("#x")) {
+      const num = parseInt(code.slice(2), 16);
+      return Number.isFinite(num) ? String.fromCodePoint(num) : match;
+    }
+    if (lower.startsWith("#")) {
+      const num = parseInt(code.slice(1), 10);
+      return Number.isFinite(num) ? String.fromCodePoint(num) : match;
+    }
+    return NAMED_ENTITIES[lower] ?? match;
+  });
+}
+
 /** Truncate long bodies — Pulse stores excerpts, not archives (cost §40). */
 export function truncate(text: string | undefined, max = 600): string | undefined {
   if (!text) return undefined;
-  const clean = text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const clean = decodeEntities(text.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
   if (clean.length <= max) return clean || undefined;
   return `${clean.slice(0, max - 1).trimEnd()}…`;
 }

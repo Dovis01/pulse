@@ -30,6 +30,22 @@ describe("rule classification", () => {
     expect(entities).toContain("openai");
     expect(importance).toBeGreaterThanOrEqual(95);
   });
+
+  it("does not substring-match entities (euro ≠ eu, feed ≠ fed)", () => {
+    const { entities } = extractEntities("Euro zone inflation feeds concerns about Europe");
+    expect(entities).not.toContain("eu");
+    expect(entities).not.toContain("fed");
+  });
+
+  it("does not classify 'load-aware scheduling' as World via 'war'", () => {
+    const result = classifyRules("vLLM merged PR: load-aware scheduling for inference");
+    expect(result.category).not.toBe("World");
+  });
+
+  it("decodes HTML entities before matching", () => {
+    const { entities } = extractEntities("NVIDIA&#039;s Rubin platform &amp; partners");
+    expect(entities).toContain("nvidia");
+  });
 });
 
 const seed = (over: Partial<ClusterSeed> = {}): ClusterSeed => ({

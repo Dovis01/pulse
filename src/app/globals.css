@@ -113,10 +113,39 @@ body {
   padding-top: 20px;
   padding-bottom: 20px;
   transition: background-color 140ms ease;
+  /* Full-bleed hover: the highlight reaches the column edges instead of
+     floating as a sliced card (main gutter is 24px / 40px on md+). */
+  margin-inline: -1.5rem;
+  padding-inline: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .story-row {
+    margin-inline: -2.5rem;
+    padding-inline: 2.5rem;
+  }
 }
 
 .story-row:hover {
   background: var(--hover);
+}
+
+/* Importance micro-gauge beside the score number. */
+.score-gauge {
+  display: inline-block;
+  width: 26px;
+  height: 2px;
+  background: var(--border-strong);
+  position: relative;
+  flex: none;
+}
+
+.score-gauge > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--foreground);
 }
 
 .read-dim {

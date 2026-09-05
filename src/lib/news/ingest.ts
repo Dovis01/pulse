@@ -13,7 +13,7 @@ import {
   type ClusterSeed,
 } from "./clustering";
 import { dedupe } from "./dedup";
-import { articleIdentity, detectLanguage, slugify, titleTokens, truncate } from "./normalize";
+import { articleIdentity, decodeEntities, detectLanguage, slugify, titleTokens, truncate } from "./normalize";
 import { fetchProviders } from "./providers";
 import type { CronGroup, NewsSource, RawArticle, StoryCluster } from "./types";
 import { computeBreakingScore } from "@/lib/ranking/breaking";
@@ -70,7 +70,7 @@ function normalizeIncoming(
     externalId: raw.externalId,
     url: raw.url,
     canonicalUrl: identity.canonicalUrl,
-    title: raw.title.trim(),
+    title: decodeEntities(raw.title).trim(),
     description: truncate(raw.description, 400),
     content: truncate(raw.content, 600),
     author: raw.author,

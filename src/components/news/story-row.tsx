@@ -38,7 +38,13 @@ export function StoryRow({ row, showRank = false }: { row: StoryRowView; showRan
           {cluster?.isBreaking && <span className="text-cat-security">● Breaking</span>}
           {time && <span className="text-muted">· {relativeTime(time)}</span>}
         </div>
-        <div className="meta-mono flex-none text-[12px] tabular-nums text-secondary" title="Importance">
+        <div
+          className="meta-mono flex flex-none items-center gap-1.5 text-[12px] tabular-nums text-secondary"
+          title={`Importance ${score}/100 — weighted from source authority, coverage breadth, velocity and recency`}
+        >
+          <span className="score-gauge" aria-hidden>
+            <span style={{ width: `${Math.max(0, Math.min(100, score))}%` }} />
+          </span>
           {score}
         </div>
       </div>
