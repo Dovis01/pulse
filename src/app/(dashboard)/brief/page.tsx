@@ -1,4 +1,5 @@
 import { GenerateBriefButton } from "@/components/brief/generate-brief-button";
+import { BriefBody } from "@/components/brief/brief-body";
 import { getBriefView } from "@/lib/queries";
 import { relativeTime } from "@/lib/time/format";
 
@@ -7,17 +8,21 @@ export const metadata = { title: "Daily Brief" };
 
 export default async function BriefPage() {
   const { brief, preview } = await getBriefView();
-  const intro = brief?.intro ?? preview?.intro ?? "No stories in the last 24 hours.";
-  const sections = brief?.sections ?? preview?.sections ?? [];
-  const watch = brief?.watchList ?? preview?.watchList ?? [];
+  const source = brief ?? preview;
+  const intro = source?.intro ?? "No stories in the last 24 hours.";
+  const sections = source?.sections ?? [];
+  const watch = source?.watchList ?? [];
+  const introZh = brief?.introZh ?? preview?.introZh;
+  const sectionsZh = brief?.sectionsZh ?? preview?.sectionsZh;
+  const watchZh = brief?.watchZh ?? preview?.watchZh;
 
   return (
     <div className="px-6 pb-16 md:px-10">
       <header className="pt-10 md:pt-14">
         <div className="meta-label">{brief?.briefDate ?? "Today"}</div>
-        <h1 className="display-headline mt-3 text-foreground">The Daily Brief</h1>
+        <h1 className="display-headline mt-3 text-foreground">The Daily Brief · 每日简报</h1>
         <div className="meta-mono mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px]">
-          <span>{brief?.storyCount ?? preview?.sections.length ?? 0} stories worth knowing</span>
+          <span>{brief?.storyCount ?? sections.length ?? 0} stories worth knowing</span>
           {brief && <span>· {brief.kind}</span>}
           {brief && <span>· generated {relativeTime(brief.generatedAt)}</span>}
           {brief?.model ? <span>· AI: {brief.model}</span> : <span>· rule-based edition</span>}
@@ -25,40 +30,24 @@ export default async function BriefPage() {
       </header>
 
       <div className="mt-8 max-w-[52rem]">
-        <p className="text-[17px] leading-[1.8] text-foreground">{intro}</p>
-
-        <div className="mt-10 space-y-9">
-          {sections.map((s, i) => (
-            <section key={`${s.label}-${i}`}>
-              <div className="section-rule pb-2 pt-4">
-                <h2 className="meta-label !text-secondary">{s.label}</h2>
-              </div>
-              <p className="mt-3 text-[14.5px] leading-relaxed text-secondary">{s.text}</p>
-            </section>
-          ))}
-        </div>
-
-        {watch.length > 0 && (
-          <section className="mt-10">
-            <div className="section-rule pb-2 pt-4">
-              <h2 className="meta-label !text-secondary">Watch today</h2>
-            </div>
-            <ul className="mt-3 space-y-1.5">
-              {watch.map((w) => (
-                <li key={w} className="text-[14px] text-secondary">
-                  <span className="mr-2 text-muted">•</span>
-                  {w}
-                </li>
-              ))}
-            </ul>
-          </section>
+        {sections.length > 0 || intro ? (
+          <BriefBody
+            intro={intro}
+            sections={sections}
+            watch={watch}
+            introZh={introZh}
+            sectionsZh={sectionsZh}
+            watchZh={watchZh}
+          />
+        ) : (
+          <p className="text-[15px] text-secondary">No stories in the last 24 hours.</p>
         )}
 
         <div className="mt-12 border-t border-border pt-5">
           <GenerateBriefButton />
           <p className="meta-mono mt-3 text-[11px] leading-relaxed">
             AI editions use the configured provider within budget; without a key the brief is composed
-            from cluster metadata. Provenance is always stamped.
+            from cluster metadata. Provenance is always stamped. 中文版由同一管线生成,可在设置中切换显示语言。
           </p>
         </div>
       </div>

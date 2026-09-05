@@ -131,6 +131,10 @@ export interface DailyBrief {
   intro: string;
   sections: { label: string; text: string }[];
   watchList: string[];
+  /** Simplified-Chinese edition of the same brief (spec §73). */
+  introZh?: string;
+  sectionsZh?: { label: string; text: string }[];
+  watchZh?: string[];
   storyCount: number;
   model?: string;
   version?: string;

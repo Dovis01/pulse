@@ -26,17 +26,7 @@ export async function runDailyTasks(repo?: Repository): Promise<DailyOutcome> {
     prunedJobs: 0,
   };
 
-  try {
-    const brief = await generateBrief(db);
-    outcome.briefGenerated = Boolean(brief);
-    if (brief) {
-      outcome.digestSent = await sendBriefDigest(brief);
-      if (outcome.digestSent) await db.recordUsage("email_sent", 1);
-    }
-  } catch {
-    // Brief failure must not block cleanup.
-  }
-
+  // Retention first — it is cheap and must not be starved by a slow AI brief.
   try {
     const cleanup = await db.cleanup({
       rawContentDays: pulseConfig.retention.rawContentDays,
@@ -49,6 +39,17 @@ export async function runDailyTasks(repo?: Repository): Promise<DailyOutcome> {
     outcome.prunedJobs = cleanup.jobsPruned;
   } catch {
     // ignore
+  }
+
+  try {
+    const brief = await generateBrief(db);
+    outcome.briefGenerated = Boolean(brief);
+    if (brief) {
+      outcome.digestSent = await sendBriefDigest(brief);
+      if (outcome.digestSent) await db.recordUsage("email_sent", 1);
+    }
+  } catch {
+    // brief failure is non-fatal
   }
 
   return outcome;

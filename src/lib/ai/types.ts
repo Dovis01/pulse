@@ -18,6 +18,10 @@ export interface BriefSynthesis {
   intro: string;
   sections: { label: string; text: string }[];
   watch: string[];
+  /** Simplified-Chinese edition (same shape), when the provider supports it. */
+  introZh?: string;
+  sectionsZh?: { label: string; text: string }[];
+  watchZh?: string[];
 }
 
 export interface ClassifyResult {

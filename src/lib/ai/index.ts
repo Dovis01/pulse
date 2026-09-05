@@ -17,7 +17,7 @@ export interface AIGate {
   degraded: boolean;
 }
 
-const DEGRADE_COOLDOWN_MS = 15 * 60_000;
+const DEGRADE_COOLDOWN_MS = 5 * 60_000;
 let degradedUntil = 0;
 let degradeReason: string | null = null;
 
@@ -98,6 +98,10 @@ export async function callAI<T>(
     if (error instanceof AIRateLimitError) {
       markAIDegraded(error.message);
     }
+    console.error(
+      `[ai] call failed (${gate.provider.id}/${gate.provider.model}):`,
+      error instanceof Error ? `${error.name}: ${error.message}` : error,
+    );
     return null;
   }
 }

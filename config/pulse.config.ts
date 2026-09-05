@@ -90,7 +90,7 @@ export const pulseConfig = {
     maxAlertsPerDay: 10,
     /** Quiet hours in app timezone — no alerts in between. */
     quietHours: { start: "23:00", end: "08:00" },
-    digestHours: [7, 18],
+    digestHours: [8, 19],
   },
 
   /** Scores / pipelines. */

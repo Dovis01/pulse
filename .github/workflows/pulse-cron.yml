@@ -6,7 +6,7 @@
 #
 #   fast   — every 15 min (breaking RSS, GDELT, HN, GitHub watchlist)
 #   normal — hourly (blogs, arXiv)
-#   daily  — 07:30 & 18:00 JST (brief + digest + retention)
+#   daily  — 08:30 & 19:00 JST (brief + digest + retention)
 
 name: pulse-cron
 
@@ -14,8 +14,8 @@ on:
   schedule:
     - cron: "*/15 * * * *" # fast
     - cron: "5 * * * *" # normal
-    - cron: "30 22 * * *" # daily morning (07:30 JST)
-    - cron: "0 9 * * *" # daily evening (18:00 JST)
+    - cron: "30 23 * * *" # daily morning (08:30 JST)
+    - cron: "0 10 * * *" # daily evening (19:00 JST)
   workflow_dispatch:
     inputs:
       group:
@@ -41,8 +41,8 @@ jobs:
           case "$SCHEDULE" in
             "*/15 * * * *") echo "group=fast" >> "$GITHUB_OUTPUT" ;;
             "5 * * * *")    echo "group=normal" >> "$GITHUB_OUTPUT" ;;
-            "30 22 * * *")  echo "group=daily" >> "$GITHUB_OUTPUT" ;;
-            "0 9 * * *")    echo "group=daily" >> "$GITHUB_OUTPUT" ;;
+            "30 23 * * *")  echo "group=daily" >> "$GITHUB_OUTPUT" ;;
+            "0 10 * * *")   echo "group=daily" >> "$GITHUB_OUTPUT" ;;
             *)              echo "group=${{ inputs.group || 'fast' }}" >> "$GITHUB_OUTPUT" ;;
           esac
 
