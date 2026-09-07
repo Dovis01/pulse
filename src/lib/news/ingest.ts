@@ -519,6 +519,14 @@ export async function runIngestion(
     // Breaking alerts (Telegram first — spec §84).
   summary.alertsSent = await processBreakingAlerts(repo);
 
+  // Self-heal a rule-based brief if AI has recovered (re-sends digest).
+  try {
+    const { maybeUpgradeBrief } = await import("@/lib/brief/generate");
+    await maybeUpgradeBrief(repo);
+  } catch {
+    // never block ingestion
+  }
+
   return summary;
 }
 

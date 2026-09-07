@@ -44,26 +44,30 @@ export class GeminiProvider implements AIProvider {
       throw new AIRateLimitError("Gemini quota exhausted (429)");
     }
     if (response.status === 503) {
-      // Free-tier overload is transient — one short retry before giving up
+      // Free-tier overload is transient — tiered retries before giving up
       // (the next scheduled run retries again; no degrade cooldown).
-      await new Promise((r) => setTimeout(r, 2_500));
-      const retry = await fetch(url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        signal: AbortSignal.timeout(timeoutMs),
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
-        }),
-      });
-      if (retry.status === 429) throw new AIRateLimitError("Gemini quota exhausted (429)");
-      if (!retry.ok) throw new Error(`Gemini HTTP ${retry.status} (overloaded)`);
-      const data2 = (await retry.json()) as {
-        candidates?: { content?: { parts?: { text?: string }[] } }[];
-      };
-      const text2 = data2.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text2) throw new Error("Gemini returned no content");
-      return JSON.parse(text2) as T;
+      for (const delayMs of [2_500, 6_000]) {
+        await new Promise((r) => setTimeout(r, delayMs));
+        const retry = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          signal: AbortSignal.timeout(timeoutMs),
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.3, responseMimeType: "application/json" },
+          }),
+        });
+        if (retry.status === 429) throw new AIRateLimitError("Gemini quota exhausted (429)");
+        if (retry.ok) {
+          const data2 = (await retry.json()) as {
+            candidates?: { content?: { parts?: { text?: string }[] } }[];
+          };
+          const text2 = data2.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (!text2) throw new Error("Gemini returned no content");
+          return JSON.parse(text2) as T;
+        }
+      }
+      throw new Error("Gemini overloaded after retries (503)");
     }
     if (!response.ok) {
       throw new Error(`Gemini HTTP ${response.status}`);

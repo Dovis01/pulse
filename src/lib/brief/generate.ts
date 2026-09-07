@@ -179,6 +179,28 @@ export async function generateBrief(
   return brief;
 }
 
+/**
+ * Self-healing brief upgrade: when the current period's brief fell back to
+ * the rule-based edition (e.g. a transient Gemini overload at 08:30), the
+ * next ingestion pass retries the AI synthesis and re-sends the corrected
+ * digest — a hiccup never costs half a day of English-only briefs.
+ */
+export async function maybeUpgradeBrief(repo: import("@/lib/db/repository").Repository): Promise<boolean> {
+  try {
+    const brief = await repo.latestBrief();
+    if (!brief || brief.model) return false; // AI edition already
+    const ageHours = (Date.now() - new Date(brief.generatedAt).getTime()) / 3_600_000;
+    if (ageHours > 6) return false; // too stale to re-send
+    const upgraded = await generateBrief(repo);
+    if (!upgraded?.model) return false; // AI still unavailable
+    const sent = await sendBriefDigest(upgraded);
+    if (sent) await repo.recordUsage("email_sent", 1, { reason: "brief-upgrade" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Send the digest email for a brief (Resend; optional, no-op if unset). */
 export async function sendBriefDigest(brief: DailyBrief): Promise<boolean> {
   const resend = new ResendProvider();
