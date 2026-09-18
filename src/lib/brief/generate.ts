@@ -127,8 +127,8 @@ export async function generateBrief(
   let version: string = "rule-v2";
 
   if (clusters.length >= 3) {
-    const synthesis = await callAI((provider) =>
-      provider.synthesizeBrief({
+    const buildInput = () =>
+      ({
         date: briefDate,
         stories: clusters.slice(0, 18).map((c) => ({
           title: c.canonicalTitle,
@@ -137,8 +137,16 @@ export async function generateBrief(
           importance: c.importanceScore,
           sources: c.sourceCount,
         })),
-      }),
-    );
+      }) as const;
+
+    // One immediate retry — Asia-morning overload windows usually clear
+    // within seconds, and a second attempt costs far less than half a day
+    // of rule-based briefs.
+    let synthesis = await callAI((provider) => provider.synthesizeBrief(buildInput()));
+    if (!synthesis) {
+      await new Promise((r) => setTimeout(r, 8_000));
+      synthesis = await callAI((provider) => provider.synthesizeBrief(buildInput()));
+    }
     if (synthesis) {
       const s: BriefSynthesis = synthesis.result;
       content = {
@@ -239,10 +247,13 @@ export async function sendBriefDigest(brief: DailyBrief): Promise<boolean> {
   };
 
   const divider = `<hr style="border:none;border-top:1px solid #E8E8E4;margin:32px 0" />`;
+  const notice = brief.model
+    ? ""
+    : `<p style="font-size:12px;color:#9B9B96;border-left:2px solid #E8E8E4;padding-left:10px;margin:0 0 20px">⚠ 本期 AI 服务暂时不可用，以上为聚合版（新闻标题保留英文原文）。系统检测到 AI 恢复后将自动补发完整中文版。<br>AI was unavailable for this edition — a full Chinese edition will be re-sent automatically once it recovers.</p>`;
 
   const ok = await resend.send({
     subject: `Pulse 每日简报 Daily Brief — ${brief.briefDate} (${brief.kind === "morning" ? "晨报" : "晚报"})`,
-    body: `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;line-height:1.6;color:#181817;color-scheme:light dark">${html("zh")}${divider}${html("en")}</div>`,
+    body: `<div style="font-family:Georgia,serif;max-width:600px;margin:0 auto;line-height:1.6;color:#181817;color-scheme:light dark">${notice}${html("zh")}${divider}${html("en")}</div>`,
   });
   return ok;
 }

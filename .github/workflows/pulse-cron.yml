@@ -16,6 +16,7 @@ on:
     - cron: "5 * * * *" # normal
     - cron: "30 23 * * *" # daily morning (08:30 JST)
     - cron: "0 10 * * *" # daily evening (19:00 JST)
+    - cron: "20 * * * *" # brief retry — upgrade rule editions once AI recovers
   workflow_dispatch:
     inputs:
       group:
@@ -23,7 +24,7 @@ on:
         required: true
         default: fast
         type: choice
-        options: [fast, normal, daily]
+        options: [fast, normal, daily, brief-retry]
 
 concurrency:
   group: pulse-${{ github.event.schedule || inputs.group }}
@@ -43,6 +44,7 @@ jobs:
             "5 * * * *")    echo "group=normal" >> "$GITHUB_OUTPUT" ;;
             "30 23 * * *")  echo "group=daily" >> "$GITHUB_OUTPUT" ;;
             "0 10 * * *")   echo "group=daily" >> "$GITHUB_OUTPUT" ;;
+            "20 * * * *")   echo "group=brief-retry" >> "$GITHUB_OUTPUT" ;;
             *)              echo "group=${{ inputs.group || 'fast' }}" >> "$GITHUB_OUTPUT" ;;
           esac
 
